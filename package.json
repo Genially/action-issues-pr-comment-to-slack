@@ -1,0 +1,15 @@
+{
+  "name": "pr-message-action",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "ncc build index.js"
+  },
+  "dependencies": {
+    "@actions/core": "^1.2.4",
+    "@actions/github": "^4.0.0",
+    "@slack/bolt": "^2.1.1",
+    "slackify-markdown": "^3.0.3"
+  }
+}

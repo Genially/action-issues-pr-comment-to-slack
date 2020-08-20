@@ -70,7 +70,7 @@ const run = async () => {
       const githubCommentorUsername = payload.comment.user.login
 
 
-      const { data: issue } = await octokit.pulls.get({
+      const { data: issue } = await octokit.issues.get({
         repo,
         owner: githubCommentorUsername,
         issue_number: issueNumber

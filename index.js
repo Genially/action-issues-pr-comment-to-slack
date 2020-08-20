@@ -4,7 +4,7 @@ const slackifyMarkdown = require('slackify-markdown')
 const { App } = require('@slack/bolt')
 
 const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
-  
+
   return [
     {
       "type": "section",
@@ -28,7 +28,7 @@ const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, gith
 
 const run = async () => {
   try {
-    
+
     const octokit = github.getOctokit(core.getInput('githubToken'))
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')
@@ -38,14 +38,14 @@ const run = async () => {
       token: slackToken,
       signingSecret: core.getInput('slackSigningSecret')
     })
-    
+
     if (github.context.payload.comment) {
       const repo = payload.pull_request.base.repo.name
       const prUrl = payload.pull_request._links.html.href
       const commentUrl = payload.comment._links.html.href
       const prNumber = prUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
-      
+
 
       const { data: pr } = await octokit.pulls.get({
         repo,
@@ -67,7 +67,7 @@ const run = async () => {
         token: slackToken,
         email: commentorSlackEmail
       })
-  
+
       const result = await app.client.chat.postMessage({
         token: slackToken,
         channel: slackAuthor.id,
@@ -82,9 +82,10 @@ const run = async () => {
           slackCommentorId: slackCommentor.id
         })
       })
+      console.log(result)
 
     }
-    
+
   } catch (e) {
     core.setFailed(e.message)
   }

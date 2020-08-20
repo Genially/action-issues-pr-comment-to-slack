@@ -80,21 +80,22 @@ const run = async () => {
       const commentorSlackEmail = userMap[githubCommentorUsername]
       const authorGhUsername = issue.user.login
       const authorSlackEmail = userMap[authorGhUsername]
-      console.log(authorGhUsername)
-      console.log(authorSlackEmail)
 
       const {user: slackAuthor} = await app.client.users.lookupByEmail({
         token: slackToken,
         email: authorSlackEmail
       })
-      console.log('e')
 
       const {user: slackCommentor} = await app.client.users.lookupByEmail({
         token: slackToken,
         email: commentorSlackEmail
       })
 
-      console.log('i')
+      console.log(createIssueBlocks({
+        issueUrl,
+        comment: payload.comment.body,
+        slackCommentorId: slackCommentor.id
+      }))
 
       const result = await app.client.chat.postMessage({
         token: slackToken,

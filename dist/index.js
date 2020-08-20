@@ -7490,7 +7490,8 @@ const run = async () => {
       const commentorSlackEmail = userMap[githubCommentorUsername]
       const authorGhUsername = issue.user.login
       const authorSlackEmail = userMap[authorGhUsername]
-      console.log('a')
+      console.log(authorGhUsername)
+      console.log(authorSlackEmail)
 
       const {user: slackAuthor} = await app.client.users.lookupByEmail({
         token: slackToken,

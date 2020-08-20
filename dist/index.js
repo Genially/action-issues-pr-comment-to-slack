@@ -7520,7 +7520,7 @@ const run = async () => {
       return;
     }
 
-    if (github.context.payload.comment) {
+    /*if (github.context.payload.comment) {
       const repo = payload.pull_request.base.repo.name
       const prUrl = payload.pull_request._links.html.href
       const commentUrl = payload.comment._links.html.href
@@ -7564,7 +7564,7 @@ const run = async () => {
         })
       })
 
-    }
+    }*/
 
   } catch (e) {
     core.setFailed(e.message)

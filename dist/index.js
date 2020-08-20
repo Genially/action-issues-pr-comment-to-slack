@@ -7438,12 +7438,15 @@ const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, gith
 
 const run = async () => {
   try {
-    console.log('hola')
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
+    console.log(octokit);
     const userMap = JSON.parse(core.getInput('userMap'))
+    console.log(userMap)
     const slackToken = core.getInput('slackToken')
+    console.log(slackToken)
     const payload = github.context.payload
+    console.log(payload)
 
     const app = new App({
       token: slackToken,

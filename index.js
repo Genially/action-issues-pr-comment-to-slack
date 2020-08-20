@@ -64,7 +64,7 @@ const run = async () => {
 
     if (payload.comment && payload.issue) {
       const repo = payload.repository.name
-      const issueUrl = payload.issue.issue_url
+      const issueUrl = payload.comment.issue_url
       const commentUrl = payload.comment.html_url
       const issueNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login

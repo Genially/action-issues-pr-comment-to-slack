@@ -3,7 +3,7 @@ const github = require('@actions/github')
 const slackifyMarkdown = require('slackify-markdown')
 const { App } = require('@slack/bolt')
 
-const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
+const createPRBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
 
   return [
     {
@@ -11,6 +11,29 @@ const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, gith
       "text": {
         "type": "mrkdwn",
         "text": `<@${slackCommentorId}> left a comment on your *<${prUrl}| PR>* for _<https://github.com/tipeio/${repo}|${repo}>_\n\n`
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": `_-start comment_:\n\n\n${slackifyMarkdown(comment)}\n\n\n_-end comment_`
+      }
+    },
+    {
+      "type": "divider"
+    },
+  ]
+}
+
+const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
+
+  return [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": `<@${slackCommentorId}> left a comment on the *<${issueUrl}| issue>*_\n\n`
       }
     },
     {
@@ -40,7 +63,54 @@ const run = async () => {
     })
 
     if (payload.comment && payload.issue) {
-      console.log(payload);
+      const repo = payload.repository.name
+      const issueUrl = payload.issue.issue_url
+      const commentUrl = payload.comment.html_url
+      const issueNumber = issueUrl.split('/').slice(-1)[0]
+      const githubCommentorUsername = payload.comment.user.login
+
+
+      const { data: issue } = await octokit.pulls.get({
+        repo,
+        owner: githubCommentorUsername,
+        issue_number: issueNumber
+      })
+
+
+      const commentorSlackEmail = userMap[githubCommentorUsername]
+      const authorGhUsername = issue.user.login
+      const authorSlackEmail = userMap[authorGhUsername]
+      console.log('a')
+
+      const {user: slackAuthor} = await app.client.users.lookupByEmail({
+        token: slackToken,
+        email: authorSlackEmail
+      })
+      console.log('e')
+
+      const {user: slackCommentor} = await app.client.users.lookupByEmail({
+        token: slackToken,
+        email: commentorSlackEmail
+      })
+
+      console.log('i')
+
+      const result = await app.client.chat.postMessage({
+        token: slackToken,
+        channel: slackAuthor.id,
+        as_user: true,
+        blocks: createPRBlocks({
+          prNumber,
+          prUrl,
+          repo,
+          commentUrl,
+          githubCommentorUsername,
+          comment: payload.comment.body,
+          slackCommentorId: slackCommentor.id
+        })
+      })
+      console.log(result)
+      return;
     }
 
     if (github.context.payload.comment) {
@@ -76,7 +146,7 @@ const run = async () => {
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
-        blocks: createBlocks({
+        blocks: createPRBlocks({
           prNumber,
           prUrl,
           repo,
@@ -86,7 +156,6 @@ const run = async () => {
           slackCommentorId: slackCommentor.id
         })
       })
-      console.log(result)
 
     }
 

@@ -30,18 +30,18 @@ const run = async () => {
   try {
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
-    console.log(octokit);
     const userMap = JSON.parse(core.getInput('userMap'))
-    console.log(userMap)
     const slackToken = core.getInput('slackToken')
-    console.log(slackToken)
     const payload = github.context.payload
-    console.log(payload)
 
     const app = new App({
       token: slackToken,
       signingSecret: core.getInput('slackSigningSecret')
     })
+
+    if (payload.comment && payload.issue) {
+      console.log(payload);
+    }
 
     if (github.context.payload.comment) {
       const repo = payload.pull_request.base.repo.name

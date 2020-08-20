@@ -7438,6 +7438,7 @@ const createBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, gith
 
 const run = async () => {
   try {
+    console.log('hola')
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
     const userMap = JSON.parse(core.getInput('userMap'))

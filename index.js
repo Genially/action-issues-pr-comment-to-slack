@@ -100,12 +100,8 @@ const run = async () => {
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
-        blocks: createPRBlocks({
-          prNumber,
-          prUrl,
-          repo,
-          commentUrl,
-          githubCommentorUsername,
+        blocks: createIssueBlocks({
+          issueUrl,
           comment: payload.comment.body,
           slackCommentorId: slackCommentor.id
         })

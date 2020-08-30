@@ -4935,653 +4935,16 @@ exports.enable(load());
 
 /***/ }),
 /* 57 */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-"use strict";
-/*!
- * express
- * Copyright(c) 2009-2013 TJ Holowaychuk
- * Copyright(c) 2013 Roman Shtylman
- * Copyright(c) 2014-2015 Douglas Christopher Wilson
- * MIT Licensed
- */
+const getMentions = __webpack_require__(265);
 
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var finalhandler = __webpack_require__(430);
-var Router = __webpack_require__(987);
-var methods = __webpack_require__(840);
-var middleware = __webpack_require__(917);
-var query = __webpack_require__(210);
-var debug = __webpack_require__(515)('express:application');
-var View = __webpack_require__(75);
-var http = __webpack_require__(605);
-var compileETag = __webpack_require__(417).compileETag;
-var compileQueryParser = __webpack_require__(417).compileQueryParser;
-var compileTrust = __webpack_require__(417).compileTrust;
-var deprecate = __webpack_require__(50)('express');
-var flatten = __webpack_require__(31);
-var merge = __webpack_require__(707);
-var resolve = __webpack_require__(622).resolve;
-var setPrototypeOf = __webpack_require__(179)
-var slice = Array.prototype.slice;
-
-/**
- * Application prototype.
- */
-
-var app = exports = module.exports = {};
-
-/**
- * Variable for trust proxy inheritance back-compat
- * @private
- */
-
-var trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';
-
-/**
- * Initialize the server.
- *
- *   - setup default configuration
- *   - setup default middleware
- *   - setup route reflection methods
- *
- * @private
- */
-
-app.init = function init() {
-  this.cache = {};
-  this.engines = {};
-  this.settings = {};
-
-  this.defaultConfiguration();
-};
-
-/**
- * Initialize application configuration.
- * @private
- */
-
-app.defaultConfiguration = function defaultConfiguration() {
-  var env = process.env.NODE_ENV || 'development';
-
-  // default settings
-  this.enable('x-powered-by');
-  this.set('etag', 'weak');
-  this.set('env', env);
-  this.set('query parser', 'extended');
-  this.set('subdomain offset', 2);
-  this.set('trust proxy', false);
-
-  // trust proxy inherit back-compat
-  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
-    configurable: true,
-    value: true
-  });
-
-  debug('booting in %s mode', env);
-
-  this.on('mount', function onmount(parent) {
-    // inherit trust proxy
-    if (this.settings[trustProxyDefaultSymbol] === true
-      && typeof parent.settings['trust proxy fn'] === 'function') {
-      delete this.settings['trust proxy'];
-      delete this.settings['trust proxy fn'];
-    }
-
-    // inherit protos
-    setPrototypeOf(this.request, parent.request)
-    setPrototypeOf(this.response, parent.response)
-    setPrototypeOf(this.engines, parent.engines)
-    setPrototypeOf(this.settings, parent.settings)
-  });
-
-  // setup locals
-  this.locals = Object.create(null);
-
-  // top-most app is mounted at /
-  this.mountpath = '/';
-
-  // default locals
-  this.locals.settings = this.settings;
-
-  // default configuration
-  this.set('view', View);
-  this.set('views', resolve('views'));
-  this.set('jsonp callback name', 'callback');
-
-  if (env === 'production') {
-    this.enable('view cache');
-  }
-
-  Object.defineProperty(this, 'router', {
-    get: function() {
-      throw new Error('\'app.router\' is deprecated!\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');
-    }
-  });
-};
-
-/**
- * lazily adds the base router if it has not yet been added.
- *
- * We cannot add the base router in the defaultConfiguration because
- * it reads app settings which might be set after that has run.
- *
- * @private
- */
-app.lazyrouter = function lazyrouter() {
-  if (!this._router) {
-    this._router = new Router({
-      caseSensitive: this.enabled('case sensitive routing'),
-      strict: this.enabled('strict routing')
-    });
-
-    this._router.use(query(this.get('query parser fn')));
-    this._router.use(middleware.init(this));
-  }
-};
-
-/**
- * Dispatch a req, res pair into the application. Starts pipeline processing.
- *
- * If no callback is provided, then default error handlers will respond
- * in the event of an error bubbling through the stack.
- *
- * @private
- */
-
-app.handle = function handle(req, res, callback) {
-  var router = this._router;
-
-  // final handler
-  var done = callback || finalhandler(req, res, {
-    env: this.get('env'),
-    onerror: logerror.bind(this)
-  });
-
-  // no routes
-  if (!router) {
-    debug('no routes defined on app');
-    done();
-    return;
-  }
-
-  router.handle(req, res, done);
-};
-
-/**
- * Proxy `Router#use()` to add middleware to the app router.
- * See Router#use() documentation for details.
- *
- * If the _fn_ parameter is an express app, then it will be
- * mounted at the _route_ specified.
- *
- * @public
- */
-
-app.use = function use(fn) {
-  var offset = 0;
-  var path = '/';
-
-  // default path to '/'
-  // disambiguate app.use([fn])
-  if (typeof fn !== 'function') {
-    var arg = fn;
-
-    while (Array.isArray(arg) && arg.length !== 0) {
-      arg = arg[0];
-    }
-
-    // first arg is the path
-    if (typeof arg !== 'function') {
-      offset = 1;
-      path = fn;
-    }
-  }
-
-  var fns = flatten(slice.call(arguments, offset));
-
-  if (fns.length === 0) {
-    throw new TypeError('app.use() requires a middleware function')
-  }
-
-  // setup router
-  this.lazyrouter();
-  var router = this._router;
-
-  fns.forEach(function (fn) {
-    // non-express app
-    if (!fn || !fn.handle || !fn.set) {
-      return router.use(path, fn);
-    }
-
-    debug('.use app under %s', path);
-    fn.mountpath = path;
-    fn.parent = this;
-
-    // restore .app property on req and res
-    router.use(path, function mounted_app(req, res, next) {
-      var orig = req.app;
-      fn.handle(req, res, function (err) {
-        setPrototypeOf(req, orig.request)
-        setPrototypeOf(res, orig.response)
-        next(err);
-      });
-    });
-
-    // mounted an app
-    fn.emit('mount', this);
-  }, this);
-
-  return this;
-};
-
-/**
- * Proxy to the app `Router#route()`
- * Returns a new `Route` instance for the _path_.
- *
- * Routes are isolated middleware stacks for specific paths.
- * See the Route api docs for details.
- *
- * @public
- */
-
-app.route = function route(path) {
-  this.lazyrouter();
-  return this._router.route(path);
-};
-
-/**
- * Register the given template engine callback `fn`
- * as `ext`.
- *
- * By default will `require()` the engine based on the
- * file extension. For example if you try to render
- * a "foo.ejs" file Express will invoke the following internally:
- *
- *     app.engine('ejs', require('ejs').__express);
- *
- * For engines that do not provide `.__express` out of the box,
- * or if you wish to "map" a different extension to the template engine
- * you may use this method. For example mapping the EJS template engine to
- * ".html" files:
- *
- *     app.engine('html', require('ejs').renderFile);
- *
- * In this case EJS provides a `.renderFile()` method with
- * the same signature that Express expects: `(path, options, callback)`,
- * though note that it aliases this method as `ejs.__express` internally
- * so if you're using ".ejs" extensions you dont need to do anything.
- *
- * Some template engines do not follow this convention, the
- * [Consolidate.js](https://github.com/tj/consolidate.js)
- * library was created to map all of node's popular template
- * engines to follow this convention, thus allowing them to
- * work seamlessly within Express.
- *
- * @param {String} ext
- * @param {Function} fn
- * @return {app} for chaining
- * @public
- */
-
-app.engine = function engine(ext, fn) {
-  if (typeof fn !== 'function') {
-    throw new Error('callback function required');
-  }
-
-  // get file extension
-  var extension = ext[0] !== '.'
-    ? '.' + ext
-    : ext;
-
-  // store engine
-  this.engines[extension] = fn;
-
-  return this;
-};
-
-/**
- * Proxy to `Router#param()` with one added api feature. The _name_ parameter
- * can be an array of names.
- *
- * See the Router#param() docs for more details.
- *
- * @param {String|Array} name
- * @param {Function} fn
- * @return {app} for chaining
- * @public
- */
-
-app.param = function param(name, fn) {
-  this.lazyrouter();
-
-  if (Array.isArray(name)) {
-    for (var i = 0; i < name.length; i++) {
-      this.param(name[i], fn);
-    }
-
-    return this;
-  }
-
-  this._router.param(name, fn);
-
-  return this;
-};
-
-/**
- * Assign `setting` to `val`, or return `setting`'s value.
- *
- *    app.set('foo', 'bar');
- *    app.set('foo');
- *    // => "bar"
- *
- * Mounted servers inherit their parent server's settings.
- *
- * @param {String} setting
- * @param {*} [val]
- * @return {Server} for chaining
- * @public
- */
-
-app.set = function set(setting, val) {
-  if (arguments.length === 1) {
-    // app.get(setting)
-    return this.settings[setting];
-  }
-
-  debug('set "%s" to %o', setting, val);
-
-  // set value
-  this.settings[setting] = val;
-
-  // trigger matched settings
-  switch (setting) {
-    case 'etag':
-      this.set('etag fn', compileETag(val));
-      break;
-    case 'query parser':
-      this.set('query parser fn', compileQueryParser(val));
-      break;
-    case 'trust proxy':
-      this.set('trust proxy fn', compileTrust(val));
-
-      // trust proxy inherit back-compat
-      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
-        configurable: true,
-        value: false
-      });
-
-      break;
-  }
-
-  return this;
-};
-
-/**
- * Return the app's absolute pathname
- * based on the parent(s) that have
- * mounted it.
- *
- * For example if the application was
- * mounted as "/admin", which itself
- * was mounted as "/blog" then the
- * return value would be "/blog/admin".
- *
- * @return {String}
- * @private
- */
-
-app.path = function path() {
-  return this.parent
-    ? this.parent.path() + this.mountpath
-    : '';
-};
-
-/**
- * Check if `setting` is enabled (truthy).
- *
- *    app.enabled('foo')
- *    // => false
- *
- *    app.enable('foo')
- *    app.enabled('foo')
- *    // => true
- *
- * @param {String} setting
- * @return {Boolean}
- * @public
- */
-
-app.enabled = function enabled(setting) {
-  return Boolean(this.set(setting));
-};
-
-/**
- * Check if `setting` is disabled.
- *
- *    app.disabled('foo')
- *    // => true
- *
- *    app.enable('foo')
- *    app.disabled('foo')
- *    // => false
- *
- * @param {String} setting
- * @return {Boolean}
- * @public
- */
-
-app.disabled = function disabled(setting) {
-  return !this.set(setting);
-};
-
-/**
- * Enable `setting`.
- *
- * @param {String} setting
- * @return {app} for chaining
- * @public
- */
-
-app.enable = function enable(setting) {
-  return this.set(setting, true);
-};
-
-/**
- * Disable `setting`.
- *
- * @param {String} setting
- * @return {app} for chaining
- * @public
- */
-
-app.disable = function disable(setting) {
-  return this.set(setting, false);
-};
-
-/**
- * Delegate `.VERB(...)` calls to `router.VERB(...)`.
- */
-
-methods.forEach(function(method){
-  app[method] = function(path){
-    if (method === 'get' && arguments.length === 1) {
-      // app.get(setting)
-      return this.set(path);
-    }
-
-    this.lazyrouter();
-
-    var route = this._router.route(path);
-    route[method].apply(route, slice.call(arguments, 1));
-    return this;
-  };
-});
-
-/**
- * Special-cased "all" method, applying the given route `path`,
- * middleware, and callback to _every_ HTTP method.
- *
- * @param {String} path
- * @param {Function} ...
- * @return {app} for chaining
- * @public
- */
-
-app.all = function all(path) {
-  this.lazyrouter();
-
-  var route = this._router.route(path);
-  var args = slice.call(arguments, 1);
-
-  for (var i = 0; i < methods.length; i++) {
-    route[methods[i]].apply(route, args);
-  }
-
-  return this;
-};
-
-// del -> delete alias
-
-app.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');
-
-/**
- * Render the given view `name` name with `options`
- * and a callback accepting an error and the
- * rendered template string.
- *
- * Example:
- *
- *    app.render('email', { name: 'Tobi' }, function(err, html){
- *      // ...
- *    })
- *
- * @param {String} name
- * @param {Object|Function} options or fn
- * @param {Function} callback
- * @public
- */
-
-app.render = function render(name, options, callback) {
-  var cache = this.cache;
-  var done = callback;
-  var engines = this.engines;
-  var opts = options;
-  var renderOptions = {};
-  var view;
-
-  // support callback function as second arg
-  if (typeof options === 'function') {
-    done = options;
-    opts = {};
-  }
-
-  // merge app.locals
-  merge(renderOptions, this.locals);
-
-  // merge options._locals
-  if (opts._locals) {
-    merge(renderOptions, opts._locals);
-  }
-
-  // merge options
-  merge(renderOptions, opts);
-
-  // set .cache unless explicitly provided
-  if (renderOptions.cache == null) {
-    renderOptions.cache = this.enabled('view cache');
-  }
-
-  // primed cache
-  if (renderOptions.cache) {
-    view = cache[name];
-  }
-
-  // view
-  if (!view) {
-    var View = this.get('view');
-
-    view = new View(name, {
-      defaultEngine: this.get('view engine'),
-      root: this.get('views'),
-      engines: engines
-    });
-
-    if (!view.path) {
-      var dirs = Array.isArray(view.root) && view.root.length > 1
-        ? 'directories "' + view.root.slice(0, -1).join('", "') + '" or "' + view.root[view.root.length - 1] + '"'
-        : 'directory "' + view.root + '"'
-      var err = new Error('Failed to lookup view "' + name + '" in views ' + dirs);
-      err.view = view;
-      return done(err);
-    }
-
-    // prime the cache
-    if (renderOptions.cache) {
-      cache[name] = view;
-    }
-  }
-
-  // render
-  tryRender(view, renderOptions, done);
-};
-
-/**
- * Listen for connections.
- *
- * A node `http.Server` is returned, with this
- * application (which is a `Function`) as its
- * callback. If you wish to create both an HTTP
- * and HTTPS server you may do so with the "http"
- * and "https" modules as shown here:
- *
- *    var http = require('http')
- *      , https = require('https')
- *      , express = require('express')
- *      , app = express();
- *
- *    http.createServer(app).listen(80);
- *    https.createServer({ ... }, app).listen(443);
- *
- * @return {http.Server}
- * @public
- */
-
-app.listen = function listen() {
-  var server = http.createServer(this);
-  return server.listen.apply(server, arguments);
-};
-
-/**
- * Log error using console.error.
- *
- * @param {Error} err
- * @private
- */
-
-function logerror(err) {
-  /* istanbul ignore next */
-  if (this.get('env') !== 'test') console.error(err.stack || err.toString());
+function mentionsPlugin (octokit) {
+  octokit.getMentions = getMentions;
 }
 
-/**
- * Try rendering a view.
- * @private
- */
+module.exports = mentionsPlugin;
 
-function tryRender(view, options, callback) {
-  try {
-    view.render(options, callback);
-  } catch (err) {
-    callback(err);
-  }
-}
 
 
 /***/ }),
@@ -5734,7 +5097,7 @@ module.exports = __webpack_require__(781);
 var bodyParser = __webpack_require__(802)
 var EventEmitter = __webpack_require__(614).EventEmitter;
 var mixin = __webpack_require__(979);
-var proto = __webpack_require__(57);
+var proto = __webpack_require__(421);
 var Route = __webpack_require__(251);
 var Router = __webpack_require__(987);
 var req = __webpack_require__(108);
@@ -7411,6 +6774,7 @@ function pad(value, level) {
 const core = __webpack_require__(470)
 const github = __webpack_require__(469)
 const slackifyMarkdown = __webpack_require__(201)
+const mentionsPlugin = __webpack_require__(57)
 const { App } = __webpack_require__(755)
 
 const createPRBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
@@ -7443,14 +6807,17 @@ const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `<@${slackCommentorId}> left a comment on the *<${issueUrl}| issue>*_\n\n`
+        "text": `<@${slackCommentorId}> left a comment on the <${issueUrl}| issue>\n\n`
       }
+    },
+    {
+      "type": "divider"
     },
     {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `_-start comment_:\n\n\n${slackifyMarkdown(comment)}\n\n\n_-end comment_`
+        "text": `\n\n\n${slackifyMarkdown(comment)}\n\n\n`
       }
     },
     {
@@ -7463,6 +6830,7 @@ const run = async () => {
   try {
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
+    octokit.plugin(mentionsPlugin);
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
@@ -7474,10 +6842,12 @@ const run = async () => {
 
     if (payload.comment && payload.issue) {
       const repo = payload.repository.name
-      const issueUrl = payload.comment.issue_url
-      const commentUrl = payload.comment.html_url
+      const issueUrl = payload.comment.html_url
       const issueNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
+
+      const commentMentions = octokit.getMentions(payload.comment);
+      console.log(commentMentions);
 
 
       const { data: issue } = await octokit.issues.get({
@@ -7501,13 +6871,7 @@ const run = async () => {
         email: commentorSlackEmail
       })
 
-      console.log(createIssueBlocks({
-        issueUrl,
-        comment: payload.comment.body,
-        slackCommentorId: slackCommentor.id
-      }))
-
-      const result = await app.client.chat.postMessage({
+      await app.client.chat.postMessage({
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
@@ -7517,11 +6881,7 @@ const run = async () => {
           slackCommentorId: slackCommentor.id
         })
       })
-      console.log(result)
-      return;
-    }
-
-    /*if (github.context.payload.comment) {
+    } else if (payload.comment && payload.pull_request) {
       const repo = payload.pull_request.base.repo.name
       const prUrl = payload.pull_request._links.html.href
       const commentUrl = payload.comment._links.html.href
@@ -7534,7 +6894,6 @@ const run = async () => {
         owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
-
 
       const commentorSlackEmail = userMap[githubCommentorUsername]
       const authorGhUsername = pr.user.login
@@ -7550,7 +6909,7 @@ const run = async () => {
         email: commentorSlackEmail
       })
 
-      const result = await app.client.chat.postMessage({
+      await app.client.chat.postMessage({
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
@@ -7565,8 +6924,7 @@ const run = async () => {
         })
       })
 
-    }*/
-
+    }
   } catch (e) {
     core.setFailed(e.message)
   }
@@ -13840,7 +13198,7 @@ lazyProperty(module.exports, 'callSiteToString', function callSiteToString () {
   Error.prepareStackTrace = prep
   Error.stackTraceLimit = limit
 
-  return stack[0].toString ? toString : __webpack_require__(265)
+  return stack[0].toString ? toString : __webpack_require__(870)
 })
 
 lazyProperty(module.exports, 'eventListenerCount', function eventListenerCount () {
@@ -14729,110 +14087,14 @@ exports.default = policies;
 /* 265 */
 /***/ (function(module) {
 
-"use strict";
-/*!
- * depd
- * Copyright(c) 2014 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- */
-
-module.exports = callSiteToString
-
-/**
- * Format a CallSite file location to a string.
- */
-
-function callSiteFileLocation (callSite) {
-  var fileName
-  var fileLocation = ''
-
-  if (callSite.isNative()) {
-    fileLocation = 'native'
-  } else if (callSite.isEval()) {
-    fileName = callSite.getScriptNameOrSourceURL()
-    if (!fileName) {
-      fileLocation = callSite.getEvalOrigin()
-    }
-  } else {
-    fileName = callSite.getFileName()
-  }
-
-  if (fileName) {
-    fileLocation += fileName
-
-    var lineNumber = callSite.getLineNumber()
-    if (lineNumber != null) {
-      fileLocation += ':' + lineNumber
-
-      var columnNumber = callSite.getColumnNumber()
-      if (columnNumber) {
-        fileLocation += ':' + columnNumber
-      }
-    }
-  }
-
-  return fileLocation || 'unknown source'
+const getMentions = ({ comment }) => {
+  const commentBody = comment.body;
+  const mentionPatter = /\B@[a-z0-9_-]+/gi;
+  const mentionsList = commentBody.match(mentionPatter);
+  return mentionsList.map(user => user.substring(1));
 }
 
-/**
- * Format a CallSite to a string.
- */
-
-function callSiteToString (callSite) {
-  var addSuffix = true
-  var fileLocation = callSiteFileLocation(callSite)
-  var functionName = callSite.getFunctionName()
-  var isConstructor = callSite.isConstructor()
-  var isMethodCall = !(callSite.isToplevel() || isConstructor)
-  var line = ''
-
-  if (isMethodCall) {
-    var methodName = callSite.getMethodName()
-    var typeName = getConstructorName(callSite)
-
-    if (functionName) {
-      if (typeName && functionName.indexOf(typeName) !== 0) {
-        line += typeName + '.'
-      }
-
-      line += functionName
-
-      if (methodName && functionName.lastIndexOf('.' + methodName) !== functionName.length - methodName.length - 1) {
-        line += ' [as ' + methodName + ']'
-      }
-    } else {
-      line += typeName + '.' + (methodName || '<anonymous>')
-    }
-  } else if (isConstructor) {
-    line += 'new ' + (functionName || '<anonymous>')
-  } else if (functionName) {
-    line += functionName
-  } else {
-    addSuffix = false
-    line += fileLocation
-  }
-
-  if (addSuffix) {
-    line += ' (' + fileLocation + ')'
-  }
-
-  return line
-}
-
-/**
- * Get constructor name of reviver.
- */
-
-function getConstructorName (obj) {
-  var receiver = obj.receiver
-  return (receiver.constructor && receiver.constructor.name) || null
-}
+module.exports = getMentions;
 
 
 /***/ }),
@@ -26003,7 +25265,657 @@ module.exports = includes;
 
 
 /***/ }),
-/* 421 */,
+/* 421 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var finalhandler = __webpack_require__(430);
+var Router = __webpack_require__(987);
+var methods = __webpack_require__(840);
+var middleware = __webpack_require__(917);
+var query = __webpack_require__(210);
+var debug = __webpack_require__(515)('express:application');
+var View = __webpack_require__(75);
+var http = __webpack_require__(605);
+var compileETag = __webpack_require__(417).compileETag;
+var compileQueryParser = __webpack_require__(417).compileQueryParser;
+var compileTrust = __webpack_require__(417).compileTrust;
+var deprecate = __webpack_require__(50)('express');
+var flatten = __webpack_require__(31);
+var merge = __webpack_require__(707);
+var resolve = __webpack_require__(622).resolve;
+var setPrototypeOf = __webpack_require__(179)
+var slice = Array.prototype.slice;
+
+/**
+ * Application prototype.
+ */
+
+var app = exports = module.exports = {};
+
+/**
+ * Variable for trust proxy inheritance back-compat
+ * @private
+ */
+
+var trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';
+
+/**
+ * Initialize the server.
+ *
+ *   - setup default configuration
+ *   - setup default middleware
+ *   - setup route reflection methods
+ *
+ * @private
+ */
+
+app.init = function init() {
+  this.cache = {};
+  this.engines = {};
+  this.settings = {};
+
+  this.defaultConfiguration();
+};
+
+/**
+ * Initialize application configuration.
+ * @private
+ */
+
+app.defaultConfiguration = function defaultConfiguration() {
+  var env = process.env.NODE_ENV || 'development';
+
+  // default settings
+  this.enable('x-powered-by');
+  this.set('etag', 'weak');
+  this.set('env', env);
+  this.set('query parser', 'extended');
+  this.set('subdomain offset', 2);
+  this.set('trust proxy', false);
+
+  // trust proxy inherit back-compat
+  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+    configurable: true,
+    value: true
+  });
+
+  debug('booting in %s mode', env);
+
+  this.on('mount', function onmount(parent) {
+    // inherit trust proxy
+    if (this.settings[trustProxyDefaultSymbol] === true
+      && typeof parent.settings['trust proxy fn'] === 'function') {
+      delete this.settings['trust proxy'];
+      delete this.settings['trust proxy fn'];
+    }
+
+    // inherit protos
+    setPrototypeOf(this.request, parent.request)
+    setPrototypeOf(this.response, parent.response)
+    setPrototypeOf(this.engines, parent.engines)
+    setPrototypeOf(this.settings, parent.settings)
+  });
+
+  // setup locals
+  this.locals = Object.create(null);
+
+  // top-most app is mounted at /
+  this.mountpath = '/';
+
+  // default locals
+  this.locals.settings = this.settings;
+
+  // default configuration
+  this.set('view', View);
+  this.set('views', resolve('views'));
+  this.set('jsonp callback name', 'callback');
+
+  if (env === 'production') {
+    this.enable('view cache');
+  }
+
+  Object.defineProperty(this, 'router', {
+    get: function() {
+      throw new Error('\'app.router\' is deprecated!\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');
+    }
+  });
+};
+
+/**
+ * lazily adds the base router if it has not yet been added.
+ *
+ * We cannot add the base router in the defaultConfiguration because
+ * it reads app settings which might be set after that has run.
+ *
+ * @private
+ */
+app.lazyrouter = function lazyrouter() {
+  if (!this._router) {
+    this._router = new Router({
+      caseSensitive: this.enabled('case sensitive routing'),
+      strict: this.enabled('strict routing')
+    });
+
+    this._router.use(query(this.get('query parser fn')));
+    this._router.use(middleware.init(this));
+  }
+};
+
+/**
+ * Dispatch a req, res pair into the application. Starts pipeline processing.
+ *
+ * If no callback is provided, then default error handlers will respond
+ * in the event of an error bubbling through the stack.
+ *
+ * @private
+ */
+
+app.handle = function handle(req, res, callback) {
+  var router = this._router;
+
+  // final handler
+  var done = callback || finalhandler(req, res, {
+    env: this.get('env'),
+    onerror: logerror.bind(this)
+  });
+
+  // no routes
+  if (!router) {
+    debug('no routes defined on app');
+    done();
+    return;
+  }
+
+  router.handle(req, res, done);
+};
+
+/**
+ * Proxy `Router#use()` to add middleware to the app router.
+ * See Router#use() documentation for details.
+ *
+ * If the _fn_ parameter is an express app, then it will be
+ * mounted at the _route_ specified.
+ *
+ * @public
+ */
+
+app.use = function use(fn) {
+  var offset = 0;
+  var path = '/';
+
+  // default path to '/'
+  // disambiguate app.use([fn])
+  if (typeof fn !== 'function') {
+    var arg = fn;
+
+    while (Array.isArray(arg) && arg.length !== 0) {
+      arg = arg[0];
+    }
+
+    // first arg is the path
+    if (typeof arg !== 'function') {
+      offset = 1;
+      path = fn;
+    }
+  }
+
+  var fns = flatten(slice.call(arguments, offset));
+
+  if (fns.length === 0) {
+    throw new TypeError('app.use() requires a middleware function')
+  }
+
+  // setup router
+  this.lazyrouter();
+  var router = this._router;
+
+  fns.forEach(function (fn) {
+    // non-express app
+    if (!fn || !fn.handle || !fn.set) {
+      return router.use(path, fn);
+    }
+
+    debug('.use app under %s', path);
+    fn.mountpath = path;
+    fn.parent = this;
+
+    // restore .app property on req and res
+    router.use(path, function mounted_app(req, res, next) {
+      var orig = req.app;
+      fn.handle(req, res, function (err) {
+        setPrototypeOf(req, orig.request)
+        setPrototypeOf(res, orig.response)
+        next(err);
+      });
+    });
+
+    // mounted an app
+    fn.emit('mount', this);
+  }, this);
+
+  return this;
+};
+
+/**
+ * Proxy to the app `Router#route()`
+ * Returns a new `Route` instance for the _path_.
+ *
+ * Routes are isolated middleware stacks for specific paths.
+ * See the Route api docs for details.
+ *
+ * @public
+ */
+
+app.route = function route(path) {
+  this.lazyrouter();
+  return this._router.route(path);
+};
+
+/**
+ * Register the given template engine callback `fn`
+ * as `ext`.
+ *
+ * By default will `require()` the engine based on the
+ * file extension. For example if you try to render
+ * a "foo.ejs" file Express will invoke the following internally:
+ *
+ *     app.engine('ejs', require('ejs').__express);
+ *
+ * For engines that do not provide `.__express` out of the box,
+ * or if you wish to "map" a different extension to the template engine
+ * you may use this method. For example mapping the EJS template engine to
+ * ".html" files:
+ *
+ *     app.engine('html', require('ejs').renderFile);
+ *
+ * In this case EJS provides a `.renderFile()` method with
+ * the same signature that Express expects: `(path, options, callback)`,
+ * though note that it aliases this method as `ejs.__express` internally
+ * so if you're using ".ejs" extensions you dont need to do anything.
+ *
+ * Some template engines do not follow this convention, the
+ * [Consolidate.js](https://github.com/tj/consolidate.js)
+ * library was created to map all of node's popular template
+ * engines to follow this convention, thus allowing them to
+ * work seamlessly within Express.
+ *
+ * @param {String} ext
+ * @param {Function} fn
+ * @return {app} for chaining
+ * @public
+ */
+
+app.engine = function engine(ext, fn) {
+  if (typeof fn !== 'function') {
+    throw new Error('callback function required');
+  }
+
+  // get file extension
+  var extension = ext[0] !== '.'
+    ? '.' + ext
+    : ext;
+
+  // store engine
+  this.engines[extension] = fn;
+
+  return this;
+};
+
+/**
+ * Proxy to `Router#param()` with one added api feature. The _name_ parameter
+ * can be an array of names.
+ *
+ * See the Router#param() docs for more details.
+ *
+ * @param {String|Array} name
+ * @param {Function} fn
+ * @return {app} for chaining
+ * @public
+ */
+
+app.param = function param(name, fn) {
+  this.lazyrouter();
+
+  if (Array.isArray(name)) {
+    for (var i = 0; i < name.length; i++) {
+      this.param(name[i], fn);
+    }
+
+    return this;
+  }
+
+  this._router.param(name, fn);
+
+  return this;
+};
+
+/**
+ * Assign `setting` to `val`, or return `setting`'s value.
+ *
+ *    app.set('foo', 'bar');
+ *    app.set('foo');
+ *    // => "bar"
+ *
+ * Mounted servers inherit their parent server's settings.
+ *
+ * @param {String} setting
+ * @param {*} [val]
+ * @return {Server} for chaining
+ * @public
+ */
+
+app.set = function set(setting, val) {
+  if (arguments.length === 1) {
+    // app.get(setting)
+    return this.settings[setting];
+  }
+
+  debug('set "%s" to %o', setting, val);
+
+  // set value
+  this.settings[setting] = val;
+
+  // trigger matched settings
+  switch (setting) {
+    case 'etag':
+      this.set('etag fn', compileETag(val));
+      break;
+    case 'query parser':
+      this.set('query parser fn', compileQueryParser(val));
+      break;
+    case 'trust proxy':
+      this.set('trust proxy fn', compileTrust(val));
+
+      // trust proxy inherit back-compat
+      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+        configurable: true,
+        value: false
+      });
+
+      break;
+  }
+
+  return this;
+};
+
+/**
+ * Return the app's absolute pathname
+ * based on the parent(s) that have
+ * mounted it.
+ *
+ * For example if the application was
+ * mounted as "/admin", which itself
+ * was mounted as "/blog" then the
+ * return value would be "/blog/admin".
+ *
+ * @return {String}
+ * @private
+ */
+
+app.path = function path() {
+  return this.parent
+    ? this.parent.path() + this.mountpath
+    : '';
+};
+
+/**
+ * Check if `setting` is enabled (truthy).
+ *
+ *    app.enabled('foo')
+ *    // => false
+ *
+ *    app.enable('foo')
+ *    app.enabled('foo')
+ *    // => true
+ *
+ * @param {String} setting
+ * @return {Boolean}
+ * @public
+ */
+
+app.enabled = function enabled(setting) {
+  return Boolean(this.set(setting));
+};
+
+/**
+ * Check if `setting` is disabled.
+ *
+ *    app.disabled('foo')
+ *    // => true
+ *
+ *    app.enable('foo')
+ *    app.disabled('foo')
+ *    // => false
+ *
+ * @param {String} setting
+ * @return {Boolean}
+ * @public
+ */
+
+app.disabled = function disabled(setting) {
+  return !this.set(setting);
+};
+
+/**
+ * Enable `setting`.
+ *
+ * @param {String} setting
+ * @return {app} for chaining
+ * @public
+ */
+
+app.enable = function enable(setting) {
+  return this.set(setting, true);
+};
+
+/**
+ * Disable `setting`.
+ *
+ * @param {String} setting
+ * @return {app} for chaining
+ * @public
+ */
+
+app.disable = function disable(setting) {
+  return this.set(setting, false);
+};
+
+/**
+ * Delegate `.VERB(...)` calls to `router.VERB(...)`.
+ */
+
+methods.forEach(function(method){
+  app[method] = function(path){
+    if (method === 'get' && arguments.length === 1) {
+      // app.get(setting)
+      return this.set(path);
+    }
+
+    this.lazyrouter();
+
+    var route = this._router.route(path);
+    route[method].apply(route, slice.call(arguments, 1));
+    return this;
+  };
+});
+
+/**
+ * Special-cased "all" method, applying the given route `path`,
+ * middleware, and callback to _every_ HTTP method.
+ *
+ * @param {String} path
+ * @param {Function} ...
+ * @return {app} for chaining
+ * @public
+ */
+
+app.all = function all(path) {
+  this.lazyrouter();
+
+  var route = this._router.route(path);
+  var args = slice.call(arguments, 1);
+
+  for (var i = 0; i < methods.length; i++) {
+    route[methods[i]].apply(route, args);
+  }
+
+  return this;
+};
+
+// del -> delete alias
+
+app.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');
+
+/**
+ * Render the given view `name` name with `options`
+ * and a callback accepting an error and the
+ * rendered template string.
+ *
+ * Example:
+ *
+ *    app.render('email', { name: 'Tobi' }, function(err, html){
+ *      // ...
+ *    })
+ *
+ * @param {String} name
+ * @param {Object|Function} options or fn
+ * @param {Function} callback
+ * @public
+ */
+
+app.render = function render(name, options, callback) {
+  var cache = this.cache;
+  var done = callback;
+  var engines = this.engines;
+  var opts = options;
+  var renderOptions = {};
+  var view;
+
+  // support callback function as second arg
+  if (typeof options === 'function') {
+    done = options;
+    opts = {};
+  }
+
+  // merge app.locals
+  merge(renderOptions, this.locals);
+
+  // merge options._locals
+  if (opts._locals) {
+    merge(renderOptions, opts._locals);
+  }
+
+  // merge options
+  merge(renderOptions, opts);
+
+  // set .cache unless explicitly provided
+  if (renderOptions.cache == null) {
+    renderOptions.cache = this.enabled('view cache');
+  }
+
+  // primed cache
+  if (renderOptions.cache) {
+    view = cache[name];
+  }
+
+  // view
+  if (!view) {
+    var View = this.get('view');
+
+    view = new View(name, {
+      defaultEngine: this.get('view engine'),
+      root: this.get('views'),
+      engines: engines
+    });
+
+    if (!view.path) {
+      var dirs = Array.isArray(view.root) && view.root.length > 1
+        ? 'directories "' + view.root.slice(0, -1).join('", "') + '" or "' + view.root[view.root.length - 1] + '"'
+        : 'directory "' + view.root + '"'
+      var err = new Error('Failed to lookup view "' + name + '" in views ' + dirs);
+      err.view = view;
+      return done(err);
+    }
+
+    // prime the cache
+    if (renderOptions.cache) {
+      cache[name] = view;
+    }
+  }
+
+  // render
+  tryRender(view, renderOptions, done);
+};
+
+/**
+ * Listen for connections.
+ *
+ * A node `http.Server` is returned, with this
+ * application (which is a `Function`) as its
+ * callback. If you wish to create both an HTTP
+ * and HTTPS server you may do so with the "http"
+ * and "https" modules as shown here:
+ *
+ *    var http = require('http')
+ *      , https = require('https')
+ *      , express = require('express')
+ *      , app = express();
+ *
+ *    http.createServer(app).listen(80);
+ *    https.createServer({ ... }, app).listen(443);
+ *
+ * @return {http.Server}
+ * @public
+ */
+
+app.listen = function listen() {
+  var server = http.createServer(this);
+  return server.listen.apply(server, arguments);
+};
+
+/**
+ * Log error using console.error.
+ *
+ * @param {Error} err
+ * @private
+ */
+
+function logerror(err) {
+  /* istanbul ignore next */
+  if (this.get('env') !== 'test') console.error(err.stack || err.toString());
+}
+
+/**
+ * Try rendering a view.
+ * @private
+ */
+
+function tryRender(view, options, callback) {
+  try {
+    view.render(options, callback);
+  } catch (err) {
+    callback(err);
+  }
+}
+
+
+/***/ }),
 /* 422 */,
 /* 423 */,
 /* 424 */
@@ -35208,7 +35120,7 @@ function whitespace(character) {
 /* 579 */
 /***/ (function(module) {
 
-module.exports = {"name":"@slack/bolt","version":"2.1.1","description":"A framework for building Slack apps, fast.","author":"Slack Technologies, Inc.","license":"MIT","keywords":["slack","bot","events-api","slash-commands","interactive-components","api","chatops","integration","slack-app"],"main":"./dist/index.js","types":"./dist/index.d.ts","files":["dist/**/*"],"engines":{"node":">=10.13.0","npm":">=6.4.1"},"scripts":{"prepare":"npm run build","build":"tsc","build:clean":"shx rm -rf ./dist ./coverage ./.nyc_output","lint":"tslint --project .","test-lint":"tslint --project tsconfig.test.json \"src/**/*.spec.ts\" && tslint --project tsconfig.test.json \"src/test-helpers.ts\"","mocha":"TS_NODE_PROJECT=tsconfig.test.json nyc mocha --config .mocharc.json \"src/**/*.spec.ts\"","test":"npm run lint && npm run test-lint && npm run mocha && npm run test:integration","test:integration":"cd integration-tests && npm install && npm test","coverage":"codecov"},"repository":"slackapi/bolt","homepage":"https://slack.dev/bolt-js","bugs":{"url":"https://github.com/slackapi/bolt-js/issues"},"dependencies":{"@slack/logger":"^2.0.0","@slack/oauth":"^1.1.0","@slack/types":"^1.6.0","@slack/web-api":"^5.9.0","@types/express":"^4.16.1","@types/node":">=10","@types/promise.allsettled":"^1.0.3","axios":"^0.19.0","express":"^4.16.4","please-upgrade-node":"^3.2.0","promise.allsettled":"^1.0.2","raw-body":"^2.3.3","tsscmp":"^1.0.6"},"devDependencies":{"@types/chai":"^4.1.7","@types/mocha":"^5.2.6","@types/sinon":"^7.0.11","chai":"^4.2.0","codecov":"^3.2.0","mocha":"^6.1.4","nyc":"^14.0.0","rewiremock":"^3.13.4","shx":"^0.3.2","sinon":"^7.3.1","source-map-support":"^0.5.12","ts-node":"^8.1.0","tslint":"^5.15.0","tslint-config-airbnb":"^5.11.1","typescript":"^3.7.2"}};
+module.exports = {"_from":"@slack/bolt@2.1.1","_id":"@slack/bolt@2.1.1","_inBundle":false,"_integrity":"sha512-6Bpv1jiQx9XcbeYfGhldJghA2EzxnforvQ8nlDLLg276oLh2qIEJ2mx2GemOTjTv0bQsX1J9cFp480D8jhlk5g==","_location":"/@slack/bolt","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"@slack/bolt@2.1.1","name":"@slack/bolt","escapedName":"@slack%2fbolt","scope":"@slack","rawSpec":"2.1.1","saveSpec":null,"fetchSpec":"2.1.1"},"_requiredBy":["/"],"_resolved":"https://registry.npmjs.org/@slack/bolt/-/bolt-2.1.1.tgz","_shasum":"310e14d989e35916aeae9d5a1bea1162df564b50","_spec":"@slack/bolt@2.1.1","_where":"/Users/skurt23/Downloads/action-pr-comment-master","author":{"name":"Slack Technologies, Inc."},"bugs":{"url":"https://github.com/slackapi/bolt-js/issues"},"bundleDependencies":false,"dependencies":{"@slack/logger":"^2.0.0","@slack/oauth":"^1.1.0","@slack/types":"^1.6.0","@slack/web-api":"^5.9.0","@types/express":"^4.16.1","@types/node":">=10","@types/promise.allsettled":"^1.0.3","axios":"^0.19.0","express":"^4.16.4","please-upgrade-node":"^3.2.0","promise.allsettled":"^1.0.2","raw-body":"^2.3.3","tsscmp":"^1.0.6"},"deprecated":false,"description":"A framework for building Slack apps, fast.","devDependencies":{"@types/chai":"^4.1.7","@types/mocha":"^5.2.6","@types/sinon":"^7.0.11","chai":"^4.2.0","codecov":"^3.2.0","mocha":"^6.1.4","nyc":"^14.0.0","rewiremock":"^3.13.4","shx":"^0.3.2","sinon":"^7.3.1","source-map-support":"^0.5.12","ts-node":"^8.1.0","tslint":"^5.15.0","tslint-config-airbnb":"^5.11.1","typescript":"^3.7.2"},"engines":{"node":">=10.13.0","npm":">=6.4.1"},"files":["dist/**/*"],"homepage":"https://slack.dev/bolt-js","keywords":["slack","bot","events-api","slash-commands","interactive-components","api","chatops","integration","slack-app"],"license":"MIT","main":"./dist/index.js","name":"@slack/bolt","repository":{"type":"git","url":"git+https://github.com/slackapi/bolt.git"},"scripts":{"build":"tsc","build:clean":"shx rm -rf ./dist ./coverage ./.nyc_output","coverage":"codecov","lint":"tslint --project .","mocha":"TS_NODE_PROJECT=tsconfig.test.json nyc mocha --config .mocharc.json \"src/**/*.spec.ts\"","prepare":"npm run build","test":"npm run lint && npm run test-lint && npm run mocha && npm run test:integration","test-lint":"tslint --project tsconfig.test.json \"src/**/*.spec.ts\" && tslint --project tsconfig.test.json \"src/test-helpers.ts\"","test:integration":"cd integration-tests && npm install && npm test"},"types":"./dist/index.d.ts","version":"2.1.1"};
 
 /***/ }),
 /* 580 */
@@ -50290,7 +50202,116 @@ module.exports = function isArguments(value) {
 
 
 /***/ }),
-/* 870 */,
+/* 870 */
+/***/ (function(module) {
+
+"use strict";
+/*!
+ * depd
+ * Copyright(c) 2014 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ */
+
+module.exports = callSiteToString
+
+/**
+ * Format a CallSite file location to a string.
+ */
+
+function callSiteFileLocation (callSite) {
+  var fileName
+  var fileLocation = ''
+
+  if (callSite.isNative()) {
+    fileLocation = 'native'
+  } else if (callSite.isEval()) {
+    fileName = callSite.getScriptNameOrSourceURL()
+    if (!fileName) {
+      fileLocation = callSite.getEvalOrigin()
+    }
+  } else {
+    fileName = callSite.getFileName()
+  }
+
+  if (fileName) {
+    fileLocation += fileName
+
+    var lineNumber = callSite.getLineNumber()
+    if (lineNumber != null) {
+      fileLocation += ':' + lineNumber
+
+      var columnNumber = callSite.getColumnNumber()
+      if (columnNumber) {
+        fileLocation += ':' + columnNumber
+      }
+    }
+  }
+
+  return fileLocation || 'unknown source'
+}
+
+/**
+ * Format a CallSite to a string.
+ */
+
+function callSiteToString (callSite) {
+  var addSuffix = true
+  var fileLocation = callSiteFileLocation(callSite)
+  var functionName = callSite.getFunctionName()
+  var isConstructor = callSite.isConstructor()
+  var isMethodCall = !(callSite.isToplevel() || isConstructor)
+  var line = ''
+
+  if (isMethodCall) {
+    var methodName = callSite.getMethodName()
+    var typeName = getConstructorName(callSite)
+
+    if (functionName) {
+      if (typeName && functionName.indexOf(typeName) !== 0) {
+        line += typeName + '.'
+      }
+
+      line += functionName
+
+      if (methodName && functionName.lastIndexOf('.' + methodName) !== functionName.length - methodName.length - 1) {
+        line += ' [as ' + methodName + ']'
+      }
+    } else {
+      line += typeName + '.' + (methodName || '<anonymous>')
+    }
+  } else if (isConstructor) {
+    line += 'new ' + (functionName || '<anonymous>')
+  } else if (functionName) {
+    line += functionName
+  } else {
+    addSuffix = false
+    line += fileLocation
+  }
+
+  if (addSuffix) {
+    line += ' (' + fileLocation + ')'
+  }
+
+  return line
+}
+
+/**
+ * Get constructor name of reviver.
+ */
+
+function getConstructorName (obj) {
+  var receiver = obj.receiver
+  return (receiver.constructor && receiver.constructor.name) || null
+}
+
+
+/***/ }),
 /* 871 */,
 /* 872 */,
 /* 873 */

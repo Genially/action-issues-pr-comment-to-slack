@@ -1,6 +1,7 @@
 const core = require('@actions/core')
 const github = require('@actions/github')
 const slackifyMarkdown = require('slackify-markdown')
+const mentionsPlugin = require('octokit-plugin-mentions')
 const { App } = require('@slack/bolt')
 
 const createPRBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
@@ -33,14 +34,17 @@ const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `<@${slackCommentorId}> left a comment on the *<${issueUrl}| issue>*_\n\n`
+        "text": `<@${slackCommentorId}> left a comment on the <${issueUrl}| issue>\n\n`
       }
+    },
+    {
+      "type": "divider"
     },
     {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `_-start comment_:\n\n\n${slackifyMarkdown(comment)}\n\n\n_-end comment_`
+        "text": `\n\n\n${slackifyMarkdown(comment)}\n\n\n`
       }
     },
     {
@@ -53,6 +57,7 @@ const run = async () => {
   try {
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
+    octokit.plugin(mentionsPlugin);
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
@@ -64,10 +69,12 @@ const run = async () => {
 
     if (payload.comment && payload.issue) {
       const repo = payload.repository.name
-      const issueUrl = payload.comment.issue_url
-      const commentUrl = payload.comment.html_url
+      const issueUrl = payload.comment.html_url
       const issueNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
+
+      const commentMentions = octokit.getMentions(payload.comment);
+      console.log(commentMentions);
 
 
       const { data: issue } = await octokit.issues.get({
@@ -91,13 +98,7 @@ const run = async () => {
         email: commentorSlackEmail
       })
 
-      console.log(createIssueBlocks({
-        issueUrl,
-        comment: payload.comment.body,
-        slackCommentorId: slackCommentor.id
-      }))
-
-      const result = await app.client.chat.postMessage({
+      await app.client.chat.postMessage({
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
@@ -107,11 +108,7 @@ const run = async () => {
           slackCommentorId: slackCommentor.id
         })
       })
-      console.log(result)
-      return;
-    }
-
-    /*if (github.context.payload.comment) {
+    } else if (payload.comment && payload.pull_request) {
       const repo = payload.pull_request.base.repo.name
       const prUrl = payload.pull_request._links.html.href
       const commentUrl = payload.comment._links.html.href
@@ -124,7 +121,6 @@ const run = async () => {
         owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
-
 
       const commentorSlackEmail = userMap[githubCommentorUsername]
       const authorGhUsername = pr.user.login
@@ -140,7 +136,7 @@ const run = async () => {
         email: commentorSlackEmail
       })
 
-      const result = await app.client.chat.postMessage({
+      await app.client.chat.postMessage({
         token: slackToken,
         channel: slackAuthor.id,
         as_user: true,
@@ -155,8 +151,7 @@ const run = async () => {
         })
       })
 
-    }*/
-
+    }
   } catch (e) {
     core.setFailed(e.message)
   }

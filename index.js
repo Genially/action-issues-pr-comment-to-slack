@@ -33,7 +33,7 @@ const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `<@${slackCommentorId}> left a comment on the <${issueUrl}| issue>\n\n`
+        "text": `<@${slackCommentorId}> left a comment on the <${issueUrl}| issue>:\n\n`
       }
     },
     {
@@ -70,8 +70,8 @@ const run = async () => {
       const mentionsList = payload.comment.body.match(mentionPatter);
       const commentMentions = mentionsList.map(user => user.substring(1));
       const repo = payload.repository.name
-      const issueUrl = payload.comment.html_url
-      const issueNumber = issueUrl.split('/').slice(-1)[0]
+      const commentUrl = payload.comment.html_url
+      const issueNumber = commentUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
       const { data: issue } = await octokit.issues.get({
@@ -96,15 +96,25 @@ const run = async () => {
           email: authorSlackEmail
         })
 
+        const message = commentUrl.contains('pull') ? createPRBlocks({
+              prNumber,
+              prUrl,
+              repo,
+              commentUrl,
+              githubCommentorUsername,
+              comment: payload.comment.body,
+              slackCommentorId: slackCommentor.id
+            }) : createIssueBlocks({
+          issueUrl: commentUrl,
+          comment: payload.comment.body,
+          slackCommentorId: slackCommentor.id
+        });
+
         await app.client.chat.postMessage({
           token: slackToken,
           channel: slackAuthor.id,
           as_user: true,
-          blocks: createIssueBlocks({
-            issueUrl,
-            comment: payload.comment.body,
-            slackCommentorId: slackCommentor.id
-          })
+          blocks: message
         })
       }
     } else if (payload.comment && payload.pull_request) {

@@ -88,12 +88,12 @@ const run = async () => {
 
         const {user: slackAuthor} = await app.client.users.lookupByEmail({
           token: slackToken,
-          email: authorSlackEmail
+          email: commentorSlackEmail
         })
 
         const {user: slackCommentor} = await app.client.users.lookupByEmail({
           token: slackToken,
-          email: commentorSlackEmail
+          email: authorSlackEmail
         })
 
         await app.client.chat.postMessage({

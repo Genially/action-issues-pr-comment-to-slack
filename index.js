@@ -1,7 +1,6 @@
 const core = require('@actions/core')
 const github = require('@actions/github')
 const slackifyMarkdown = require('slackify-markdown')
-const mentionsPlugin = require('octokit-plugin-mentions')
 const { App } = require('@slack/bolt')
 
 const createPRBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, githubCommentorUsername, comment}) => {
@@ -57,8 +56,6 @@ const run = async () => {
   try {
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
-    console.log(octokit)
-    octokit.plugin(mentionsPlugin);
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
@@ -69,12 +66,14 @@ const run = async () => {
     })
 
     if (payload.comment && payload.issue) {
+      const mentionPatter = /\B@[a-z0-9_-]+/gi;
+      const mentionsList = payload.comment.body.match(mentionPatter);
+      const commentMentions = mentionsList.map(user => user.substring(1));
       const repo = payload.repository.name
       const issueUrl = payload.comment.html_url
       const issueNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
-      const commentMentions = octokit.getMentions(payload.comment);
       console.log(commentMentions);
 
 

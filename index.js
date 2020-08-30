@@ -97,8 +97,8 @@ const run = async () => {
         })
 
         const message = commentUrl.includes('pull') ? createPRBlocks({
-              prNumber,
-              prUrl,
+              issueNumber,
+              commentUrl,
               repo,
               commentUrl,
               githubCommentorUsername,

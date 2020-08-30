@@ -96,7 +96,7 @@ const run = async () => {
           email: authorSlackEmail
         })
 
-        const message = commentUrl.contains('pull') ? createPRBlocks({
+        const message = commentUrl.includes('pull') ? createPRBlocks({
               prNumber,
               prUrl,
               repo,

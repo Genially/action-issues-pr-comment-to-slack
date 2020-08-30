@@ -10,14 +10,17 @@ const createPRBlocks = ({repo, prNumber, prUrl, commentUrl, slackCommentorId, gi
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `<@${slackCommentorId}> left a comment on your *<${prUrl}| PR>* for _<https://github.com/tipeio/${repo}|${repo}>_\n\n`
+        "text": `<@${slackCommentorId}> left a comment on your *<${prUrl}| PR>*\n\n`
       }
+    },
+    {
+      "type": "divider"
     },
     {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": `_-start comment_:\n\n\n${slackifyMarkdown(comment)}\n\n\n_-end comment_`
+        "text": `\n\n\n${'```' + slackifyMarkdown(comment) + '```'}\n\n\n`
       }
     },
     {
@@ -97,8 +100,8 @@ const run = async () => {
         })
 
         const message = commentUrl.includes('pull') ? createPRBlocks({
-              issueNumber,
-              commentUrl,
+              prNumber: issueNumber,
+              prUrl: commentUrl,
               repo,
               commentUrl,
               githubCommentorUsername,

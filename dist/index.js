@@ -6830,6 +6830,7 @@ const run = async () => {
   try {
 
     const octokit = github.getOctokit(core.getInput('githubToken'))
+    console.log(octokit)
     octokit.plugin(mentionsPlugin);
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')

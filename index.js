@@ -74,9 +74,6 @@ const run = async () => {
       const issueNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
-      console.log(commentMentions);
-
-
       const { data: issue } = await octokit.issues.get({
         repo,
         owner: githubCommentorUsername,
@@ -84,30 +81,32 @@ const run = async () => {
       })
 
 
-      const commentorSlackEmail = userMap[githubCommentorUsername]
-      const authorGhUsername = issue.user.login
-      const authorSlackEmail = userMap[authorGhUsername]
+      for (const user of commentMentions) {
+        const commentorSlackEmail = userMap[user]
+        const authorGhUsername = issue.user.login
+        const authorSlackEmail = userMap[authorGhUsername]
 
-      const {user: slackAuthor} = await app.client.users.lookupByEmail({
-        token: slackToken,
-        email: authorSlackEmail
-      })
-
-      const {user: slackCommentor} = await app.client.users.lookupByEmail({
-        token: slackToken,
-        email: commentorSlackEmail
-      })
-
-      await app.client.chat.postMessage({
-        token: slackToken,
-        channel: slackAuthor.id,
-        as_user: true,
-        blocks: createIssueBlocks({
-          issueUrl,
-          comment: payload.comment.body,
-          slackCommentorId: slackCommentor.id
+        const {user: slackAuthor} = await app.client.users.lookupByEmail({
+          token: slackToken,
+          email: authorSlackEmail
         })
-      })
+
+        const {user: slackCommentor} = await app.client.users.lookupByEmail({
+          token: slackToken,
+          email: commentorSlackEmail
+        })
+
+        await app.client.chat.postMessage({
+          token: slackToken,
+          channel: slackAuthor.id,
+          as_user: true,
+          blocks: createIssueBlocks({
+            issueUrl,
+            comment: payload.comment.body,
+            slackCommentorId: slackCommentor.id
+          })
+        })
+      }
     } else if (payload.comment && payload.pull_request) {
       const repo = payload.pull_request.base.repo.name
       const prUrl = payload.pull_request._links.html.href

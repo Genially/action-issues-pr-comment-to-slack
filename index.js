@@ -199,6 +199,7 @@ const run = async () => {
           email: authorSlackEmail
         })
 
+        console.log(payload.review)
         await app.client.chat.postMessage({
           token: slackToken,
           channel: slackAuthor.id,

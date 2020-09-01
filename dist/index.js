@@ -7473,8 +7473,6 @@ const run = async () => {
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
 
-    console.log(payload)
-
     const app = new App({
       token: slackToken,
       signingSecret: core.getInput('slackSigningSecret')
@@ -7542,13 +7540,13 @@ const run = async () => {
       const prNumber = prUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
-
+      console.log('a')
       const { data: pr } = await octokit.pulls.get({
         repo,
         owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
-
+      console.log('e')
       for (const user of commentMentions) {
         const commentorSlackEmail = userMap[user]
         const authorGhUsername = pr.user.login

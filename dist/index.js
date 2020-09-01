@@ -7540,13 +7540,13 @@ const run = async () => {
       const prNumber = prUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
-      console.log('a')
+
       const { data: pr } = await octokit.pulls.get({
         repo,
         owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
-      console.log('e')
+
       for (const user of commentMentions) {
         const commentorSlackEmail = userMap[user]
         const authorGhUsername = pr.user.login
@@ -7588,13 +7588,13 @@ const run = async () => {
       const prNumber = prUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.review.user.login
 
-
+      console.log('a')
       const { data: pr } = await octokit.pulls.get({
         repo,
         owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
-
+      console.log('e')
       for (const user of commentMentions) {
         const commentorSlackEmail = userMap[user]
         const authorGhUsername = pr.user.login

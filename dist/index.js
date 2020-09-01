@@ -7478,6 +7478,8 @@ const run = async () => {
       signingSecret: core.getInput('slackSigningSecret')
     })
 
+    console.log(payload)
+
     if (payload.comment && payload.issue) {
       const mentionPatter = /\B@[a-z0-9_-]+/gi;
       const mentionsList = payload.comment.body.match(mentionPatter);
@@ -7579,7 +7581,6 @@ const run = async () => {
       }
 
     } else if (payload.review && payload.pull_request) {
-      console.log(payload.review)
       const mentionPatter = /\B@[a-z0-9_-]+/gi;
       const mentionsList = payload.review.body.match(mentionPatter);
       const commentMentions = mentionsList.map(user => user.substring(1));

@@ -209,7 +209,7 @@ const run = async () => {
             repo,
             commentUrl,
             githubCommentorUsername,
-            comment: payload.comment.body,
+            comment: payload.review.body,
             slackCommentorId: slackCommentor.id
           })
         })

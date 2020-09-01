@@ -7588,7 +7588,7 @@ const run = async () => {
       const prUrl = payload.pull_request._links.html.href
       const commentUrl = payload.review._links.html.href
       const prNumber = prUrl.split('/').slice(-1)[0]
-      const githubCommentorUsername = payload.comment.user.login
+      const githubCommentorUsername = payload.review.user.login
 
 
       const { data: pr } = await octokit.pulls.get({

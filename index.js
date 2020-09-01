@@ -63,6 +63,8 @@ const run = async () => {
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
 
+    console.log(payload)
+
     const app = new App({
       token: slackToken,
       signingSecret: core.getInput('slackSigningSecret')

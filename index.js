@@ -170,8 +170,55 @@ const run = async () => {
         })
       }
 
+    } else if (payload.review && payload.pull_request) {
+      const mentionPatter = /\B@[a-z0-9_-]+/gi;
+      const mentionsList = payload.review.body.match(mentionPatter);
+      const commentMentions = mentionsList.map(user => user.substring(1));
+      const repo = payload.pull_request.base.repo.name
+      const prUrl = payload.pull_request._links.html.href
+      const commentUrl = payload.review._links.html.href
+      const prNumber = prUrl.split('/').slice(-1)[0]
+      const githubCommentorUsername = payload.comment.user.login
+
+
+      const { data: pr } = await octokit.pulls.get({
+        repo,
+        owner: payload.organization.login,
+        pull_number: payload.pull_request.number
+      })
+
+      for (const user of commentMentions) {
+        const commentorSlackEmail = userMap[user]
+        const authorGhUsername = pr.user.login
+        const authorSlackEmail = userMap[authorGhUsername]
+
+        const {user: slackAuthor} = await app.client.users.lookupByEmail({
+          token: slackToken,
+          email: commentorSlackEmail
+        })
+
+        const {user: slackCommentor} = await app.client.users.lookupByEmail({
+          token: slackToken,
+          email: authorSlackEmail
+        })
+
+        await app.client.chat.postMessage({
+          token: slackToken,
+          channel: slackAuthor.id,
+          as_user: true,
+          blocks: createPRBlocks({
+            prNumber,
+            prUrl,
+            repo,
+            commentUrl,
+            githubCommentorUsername,
+            comment: payload.comment.body,
+            slackCommentorId: slackCommentor.id
+          })
+        })
+      }
     }
-  } catch (e) {
+  }catch (e) {
     core.setFailed(e.message)
   }
 }

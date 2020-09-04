@@ -88,6 +88,7 @@ const run = async () => {
         owner: payload.organization.login,
         issue_number: issueUrl
       })
+      console.log('e')
 
       if (commentMentions) {
         for (const user of commentMentions) {

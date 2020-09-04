@@ -7491,14 +7491,21 @@ const run = async () => {
       const commentUrl = payload.comment.html_url
       const issueUrl = payload.comment.issue_url
       const issueNumber = commentUrl.split('/').slice(-1)[0]
+      const commentNumber = issueUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
+
+      console.log(issueUrl)
+      console.log(commentUrl)
+      console.log(repo)
+      console.log(issueNumber)
+      console.log(commentNumber)
+      console.log(payload.organization.login)
 
       const { data: issue } = await octokit.issues.get({
         repo,
         owner: payload.organization.login,
         issue_number: issueUrl
       })
-      console.log('e')
 
       if (commentMentions) {
         for (const user of commentMentions) {

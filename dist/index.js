@@ -7504,16 +7504,19 @@ const run = async () => {
           const commentorSlackEmail = userMap[user]
           const authorGhUsername = issue.user.login
           const authorSlackEmail = userMap[authorGhUsername]
+          console.log('a')
 
           const {user: slackUser} = await app.client.users.lookupByEmail({
             token: slackToken,
             email: commentorSlackEmail
           })
+          console.log('e')
 
           const {user: slackCommentor} = await app.client.users.lookupByEmail({
             token: slackToken,
             email: authorSlackEmail
           })
+          console.log('i')
 
           const message = commentUrl.includes('pull') ? createPRBlocks({
             prNumber: issueNumber,
@@ -7528,6 +7531,7 @@ const run = async () => {
             comment: payload.comment.body,
             slackCommentorId: slackCommentor.id
           });
+          console.log('o')
 
           await app.client.chat.postMessage({
             token: slackToken,
@@ -7535,6 +7539,7 @@ const run = async () => {
             as_user: true,
             blocks: message
           })
+          console.log('u')
         }
       }
     } else if (payload.comment && payload.pull_request) {

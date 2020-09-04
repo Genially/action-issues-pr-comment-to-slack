@@ -1,5 +1,5 @@
-name: 'Slack PR comment'
-description: 'Send a notification to Slack when a PR has a comment'
+name: 'Slack comment'
+description: 'Send a notification to Slack when a PR or an issue has a comment'
 inputs:
   userMap:  # id of input
     description: 'Map of Github usernames mapped to Slack names'

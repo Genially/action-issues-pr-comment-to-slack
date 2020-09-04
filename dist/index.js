@@ -7489,14 +7489,14 @@ const run = async () => {
       const commentMentions = getMentionsInText(payload.comment.body);
       const repo = payload.repository.name
       const commentUrl = payload.comment.html_url
+      const issueUrl = payload.comment.issue_url
       const issueNumber = commentUrl.split('/').slice(-1)[0]
       const githubCommentorUsername = payload.comment.user.login
 
-      console.log(payload)
       const { data: issue } = await octokit.issues.get({
         repo,
         owner: payload.organization.login,
-        issue_number: issueNumber
+        issue_number: issueUrl
       })
 
       if (commentMentions) {

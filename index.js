@@ -185,7 +185,7 @@ const run = async () => {
 
       const { data: pr } = await octokit.pulls.get({
         repo,
-        owner: payload.review.user.login,
+        owner: payload.organization.login,
         pull_number: payload.pull_request.number
       })
 

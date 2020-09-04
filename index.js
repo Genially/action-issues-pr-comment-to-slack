@@ -86,9 +86,8 @@ const run = async () => {
       const { data: issue } = await octokit.issues.get({
         repo,
         owner: payload.organization.login,
-        issue_number: issueUrl
+        issue_number: issueNumber
       })
-      console.log('e')
 
       if (commentMentions) {
         for (const user of commentMentions) {

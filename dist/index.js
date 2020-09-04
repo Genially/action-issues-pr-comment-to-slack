@@ -7467,8 +7467,8 @@ const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
 
 function getMentionsInText(text) {
   const mentionPatter = /\B@[a-z0-9_-]+/gi;
-  const mentionsList = text.match(mentionPatter);
-  return mentionsList.map(user => user.substring(1));
+  const mentionsList = text.match(mentionPatter) || [];
+  return mentionsList.length !== 0 ? mentionsList.map(user => user.substring(1)) : null;
 }
 
 const run = async () => {
@@ -7498,42 +7498,43 @@ const run = async () => {
         issue_number: issueNumber
       })
 
+      if (commentMentions) {
+        for (const user of commentMentions) {
+          const commentorSlackEmail = userMap[user]
+          const authorGhUsername = issue.user.login
+          const authorSlackEmail = userMap[authorGhUsername]
 
-      for (const user of commentMentions) {
-        const commentorSlackEmail = userMap[user]
-        const authorGhUsername = issue.user.login
-        const authorSlackEmail = userMap[authorGhUsername]
+          const {user: slackUser} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: commentorSlackEmail
+          })
 
-        const {user: slackUser} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: commentorSlackEmail
-        })
+          const {user: slackCommentor} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: authorSlackEmail
+          })
 
-        const {user: slackCommentor} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: authorSlackEmail
-        })
+          const message = commentUrl.includes('pull') ? createPRBlocks({
+            prNumber: issueNumber,
+            prUrl: commentUrl,
+            repo,
+            commentUrl,
+            githubCommentorUsername,
+            comment: payload.comment.body,
+            slackCommentorId: slackCommentor.id
+          }) : createIssueBlocks({
+            issueUrl: commentUrl,
+            comment: payload.comment.body,
+            slackCommentorId: slackCommentor.id
+          });
 
-        const message = commentUrl.includes('pull') ? createPRBlocks({
-              prNumber: issueNumber,
-              prUrl: commentUrl,
-              repo,
-              commentUrl,
-              githubCommentorUsername,
-              comment: payload.comment.body,
-              slackCommentorId: slackCommentor.id
-            }) : createIssueBlocks({
-          issueUrl: commentUrl,
-          comment: payload.comment.body,
-          slackCommentorId: slackCommentor.id
-        });
-
-        await app.client.chat.postMessage({
-          token: slackToken,
-          channel: slackUser.id,
-          as_user: true,
-          blocks: message
-        })
+          await app.client.chat.postMessage({
+            token: slackToken,
+            channel: slackUser.id,
+            as_user: true,
+            blocks: message
+          })
+        }
       }
     } else if (payload.comment && payload.pull_request) {
       const commentMentions = getMentionsInText(payload.comment.body);
@@ -7550,37 +7551,38 @@ const run = async () => {
         pull_number: payload.pull_request.number
       })
 
-      for (const user of commentMentions) {
-        const commentorSlackEmail = userMap[user]
-        const authorGhUsername = pr.user.login
-        const authorSlackEmail = userMap[authorGhUsername]
+      if (commentMentions) {
+        for (const user of commentMentions) {
+          const commentorSlackEmail = userMap[user]
+          const authorGhUsername = pr.user.login
+          const authorSlackEmail = userMap[authorGhUsername]
 
-        const {user: slackUser} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: commentorSlackEmail
-        })
-
-        const {user: slackCommentor} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: authorSlackEmail
-        })
-
-        await app.client.chat.postMessage({
-          token: slackToken,
-          channel: slackUser.id,
-          as_user: true,
-          blocks: createPRBlocks({
-            prNumber,
-            prUrl,
-            repo,
-            commentUrl,
-            githubCommentorUsername,
-            comment: payload.comment.body,
-            slackCommentorId: slackCommentor.id
+          const {user: slackUser} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: commentorSlackEmail
           })
-        })
-      }
 
+          const {user: slackCommentor} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: authorSlackEmail
+          })
+
+          await app.client.chat.postMessage({
+            token: slackToken,
+            channel: slackUser.id,
+            as_user: true,
+            blocks: createPRBlocks({
+              prNumber,
+              prUrl,
+              repo,
+              commentUrl,
+              githubCommentorUsername,
+              comment: payload.comment.body,
+              slackCommentorId: slackCommentor.id
+            })
+          })
+        }
+      }
     } else if (payload.review && payload.pull_request) {
       const commentMentions = getMentionsInText(payload.review.body);
       const repo = payload.pull_request.base.repo.name
@@ -7595,35 +7597,37 @@ const run = async () => {
         pull_number: payload.pull_request.number
       })
 
-      for (const user of commentMentions) {
-        const commentorSlackEmail = userMap[user]
-        const authorGhUsername = pr.user.login
-        const authorSlackEmail = userMap[authorGhUsername]
+      if (commentMentions) {
+        for (const user of commentMentions) {
+          const commentorSlackEmail = userMap[user]
+          const authorGhUsername = pr.user.login
+          const authorSlackEmail = userMap[authorGhUsername]
 
-        const {user: slackUser} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: commentorSlackEmail
-        })
-
-        const {user: slackCommentor} = await app.client.users.lookupByEmail({
-          token: slackToken,
-          email: authorSlackEmail
-        })
-
-        await app.client.chat.postMessage({
-          token: slackToken,
-          channel: slackUser.id,
-          as_user: true,
-          blocks: createPRBlocks({
-            prNumber,
-            prUrl,
-            repo,
-            commentUrl,
-            githubCommentorUsername,
-            comment: payload.review.body,
-            slackCommentorId: slackCommentor.id
+          const {user: slackUser} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: commentorSlackEmail
           })
-        })
+
+          const {user: slackCommentor} = await app.client.users.lookupByEmail({
+            token: slackToken,
+            email: authorSlackEmail
+          })
+
+          await app.client.chat.postMessage({
+            token: slackToken,
+            channel: slackUser.id,
+            as_user: true,
+            blocks: createPRBlocks({
+              prNumber,
+              prUrl,
+              repo,
+              commentUrl,
+              githubCommentorUsername,
+              comment: payload.review.body,
+              slackCommentorId: slackCommentor.id
+            })
+          })
+        }
       }
     }
   }catch (e) {

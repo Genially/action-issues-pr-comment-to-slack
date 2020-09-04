@@ -7494,7 +7494,7 @@ const run = async () => {
 
       const { data: issue } = await octokit.issues.get({
         repo,
-        owner: githubCommentorUsername,
+        owner: payload.organization.login,
         issue_number: issueNumber
       })
 

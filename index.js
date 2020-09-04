@@ -58,8 +58,7 @@ const createIssueBlocks = ({ issueUrl, slackCommentorId, comment}) => {
 function getMentionsInText(text) {
   const mentionPatter = /\B@[a-z0-9_-]+/gi;
   const mentionsList = text.match(mentionPatter) || [];
-  console.log(mentionsList);
-  return mentionsList.length !== 0 ? mentionsList.map(user => user.substring(1)) : null;
+  return mentionsList.length > 0 ? mentionsList.map(user => user.substring(1)) : null;
 }
 
 const run = async () => {
@@ -69,6 +68,8 @@ const run = async () => {
     const userMap = JSON.parse(core.getInput('userMap'))
     const slackToken = core.getInput('slackToken')
     const payload = github.context.payload
+
+    console.log(payload)
 
     const app = new App({
       token: slackToken,
